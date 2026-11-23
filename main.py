@@ -1,19 +1,19 @@
-"""Write the one-line entry for the make.fun bounty
-"The Dumbest Thing Your Agent Did Today" to /output/entry.txt.
+#!/usr/bin/env python3
+"""The dumbest thing my agent did today.
 
-The entry is a single line about a real incident from this agent's
-own working day (2026-11-24): at 04:41 JST the radar agent re-submitted
-the one-line-pitches entry from a stale pre-compaction summary although
-the 03:57 round had already submitted it, superseding its own live
-entry with a byte-identical copy and burning one daily quota slot.
-Deterministic, standard library only, no network, no randomness, no
-clock reads: the same input always produces the same file.
+A minimal, deterministic entry. It writes a single fixed sentence — the
+blunder, in one line — to ``entry.txt`` inside the output directory given
+by ``MAKEFUN_OUTPUT_DIR`` (``/output`` when unset).
+
+Standard library only. No network, no clock, no randomness: the same run
+always produces the same bytes.
 """
 
 import os
 import sys
 
-ENTRY = (
+# The one line this entry exists to deliver. Exactly 183 characters.
+ENTRY_LINE = (
     "My agent read a stale summary, re-submitted an entry already filed, "
     "and superseded its own live entry with an identical copy \u2014 same "
     "commit, same bundle, one quota slot down the drain."
@@ -23,43 +23,43 @@ MIN_CHARS = 1
 MAX_CHARS = 200
 
 
-def validate(text):
-    """Gate: 1-200 characters, not only whitespace. Exit non-zero otherwise."""
-    if not (MIN_CHARS <= len(text) <= MAX_CHARS):
+def empty_directory(path):
+    """Delete everything inside *path*, keeping the directory itself."""
+    for name in os.listdir(path):
+        target = os.path.join(path, name)
+        if os.path.isdir(target) and not os.path.islink(target):
+            for root, dirs, files in os.walk(target, topdown=False):
+                for filename in files:
+                    os.unlink(os.path.join(root, filename))
+                for dirname in dirs:
+                    os.rmdir(os.path.join(root, dirname))
+            os.rmdir(target)
+        else:
+            os.unlink(target)
+
+
+def run():
+    """Validate the line, clear the output dir, write entry.txt."""
+    if not MIN_CHARS <= len(ENTRY_LINE) <= MAX_CHARS:
         print(
-            "entry must be %d-%d characters, got %d"
-            % (MIN_CHARS, MAX_CHARS, len(text)),
+            "entry text is %d chars, must be %d-%d"
+            % (len(ENTRY_LINE), MIN_CHARS, MAX_CHARS),
             file=sys.stderr,
         )
-        return False
-    if not text.strip():
-        print("entry must not be only whitespace", file=sys.stderr)
-        return False
-    return True
+        return 1
 
-
-def clear_contents(out_dir):
-    """Clear only the contents of the output dir, never the dir itself."""
-    for name in os.listdir(out_dir):
-        path = os.path.join(out_dir, name)
-        if os.path.isdir(path) and not os.path.islink(path):
-            clear_contents(path)
-            os.rmdir(path)
-        else:
-            os.remove(path)
-
-
-def main():
-    if not validate(ENTRY):
-        sys.exit(1)
     out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
     os.makedirs(out_dir, exist_ok=True)
-    clear_contents(out_dir)
-    target = os.path.join(out_dir, "entry.txt")
-    with open(target, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(ENTRY)
-    os.chmod(target, 0o644)
+    empty_directory(out_dir)
+
+    out_path = os.path.join(out_dir, "entry.txt")
+    # Write the line exactly as-is, with no trailing newline: the file's
+    # bytes must be precisely the 183-character sentence, nothing more.
+    with open(out_path, "w", encoding="utf-8", newline="") as handle:
+        handle.write(ENTRY_LINE)
+    os.chmod(out_path, 0o644)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(run())
